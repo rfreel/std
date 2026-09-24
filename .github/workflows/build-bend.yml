@@ -1,4 +1,4 @@
-name: build-bend-portable
+name: build-godpack
 
 on:
   push:
@@ -11,55 +11,50 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        pack: [bend, core, languages, solvers, science, data, web, media, security, devops]
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Build Bend
+      - name: Build pack
         run: |
           set -euxo pipefail
-          nix build github:lukasl-dev/bend.nix#bend --out-link result
-          ./result/bin/bend version
+          nix build ".#${{ matrix.pack }}" --out-link result
 
-      - name: Smoke test Bend on builder
+      - name: Test Bend
+        if: matrix.pack == 'bend'
         run: |
+          set -euxo pipefail
+          ./result/bin/bend version
           cat > hello.bend <<'EOF'
           import Base
 
           def main() -> IO(Unit):
             IO.print("Hello from Bend")
           EOF
-          ./result/bin/bend hello.bend
+          test "$(./result/bin/bend hello.bend)" = "Hello from Bend"
           ./result/bin/bend hello.bend -o hello
-          ./hello
+          test "$(./hello)" = "Hello from Bend"
 
-      - name: Build portable Arx bundle
+      - name: Bundle closure
         run: |
           set -euxo pipefail
-          nix bundle github:lukasl-dev/bend.nix#bend \
-            --bundler github:NixOS/bundlers#toArx \
-            --out-link bend-portable
-          test -e bend-portable
-          cp -L bend-portable bend-x86_64-linux
-          chmod +x bend-x86_64-linux
-          ./bend-x86_64-linux version
+          mkdir -p artifact
+          nix-store -qR ./result > artifact/closure-paths.txt
+          nix path-info -Sh ./result > artifact/result-size.txt
+          nix-store --export $(nix-store -qR ./result) | zstd -T0 -10 > "artifact/${{ matrix.pack }}.nar.zst"
+          cp flake.lock artifact/flake.lock
+          sha256sum artifact/* > artifact/SHA256SUMS
 
-      - name: Record closure
-        run: |
-          nix-store -qR ./result > closure-paths.txt
-          nix path-info -Sh ./result > result-size.txt
-          sha256sum bend-x86_64-linux > SHA256SUMS
-
-      - name: Upload portable Bend
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bend-x86_64-linux
-          path: |
-            bend-x86_64-linux
-            closure-paths.txt
-            result-size.txt
-            SHA256SUMS
+          name: godpack-${{ matrix.pack }}-x86_64-linux
+          path: artifact/
           if-no-files-found: error
           compression-level: 0

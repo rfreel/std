@@ -98,7 +98,7 @@
 
       mediaNames = [
         "ffmpeg" "imagemagick" "graphicsmagick"
-        "ghostscript" "poppler_utils" "qpdf" "pdftk"
+        "ghostscript" "poppler-utils" "qpdf" "pdftk"
         "pandoc" "texliveSmall"
         "sox" "lame"
         "tesseract"

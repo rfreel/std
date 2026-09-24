@@ -1,0 +1,65 @@
+name: build-bend-portable
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Build Bend
+        run: |
+          set -euxo pipefail
+          nix build github:lukasl-dev/bend.nix#bend --out-link result
+          ./result/bin/bend version
+
+      - name: Smoke test Bend on builder
+        run: |
+          cat > hello.bend <<'EOF'
+          import Base
+
+          def main() -> IO(Unit):
+            IO.print("Hello from Bend")
+          EOF
+          ./result/bin/bend hello.bend
+          ./result/bin/bend hello.bend -o hello
+          ./hello
+
+      - name: Build portable Arx bundle
+        run: |
+          set -euxo pipefail
+          nix bundle github:lukasl-dev/bend.nix#bend \
+            --bundler github:NixOS/bundlers#toArx \
+            --out-link bend-portable
+          test -e bend-portable
+          cp -L bend-portable bend-x86_64-linux
+          chmod +x bend-x86_64-linux
+          ./bend-x86_64-linux version
+
+      - name: Record closure
+        run: |
+          nix-store -qR ./result > closure-paths.txt
+          nix path-info -Sh ./result > result-size.txt
+          sha256sum bend-x86_64-linux > SHA256SUMS
+
+      - name: Upload portable Bend
+        uses: actions/upload-artifact@v4
+        with:
+          name: bend-x86_64-linux
+          path: |
+            bend-x86_64-linux
+            closure-paths.txt
+            result-size.txt
+            SHA256SUMS
+          if-no-files-found: error
+          compression-level: 0

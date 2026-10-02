@@ -1,0 +1,33 @@
+name: Web tool membership
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  membership:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa
+        with:
+          determinate: false
+          kvm: false
+      - name: Evaluate required web tool membership
+        shell: bash
+        run: |
+          set -euo pipefail
+          nixpkgs_path="$(nix eval --impure --raw --expr 'builtins.fetchTarball {
+            url = "https://github.com/NixOS/nixpkgs/archive/4975466d324710c576dc11ad614684e6bd8cad8e.tar.gz";
+            sha256 = "1if9h4d8rkgd7a41j978swbixif81iqfd7hk302w0fbd23i9g7y4";
+          }')"
+          result="$(nix-instantiate --eval --strict tests/web-tools.nix --arg nixpkgs "$nixpkgs_path")"
+          test "$result" = true

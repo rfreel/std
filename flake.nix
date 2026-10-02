@@ -93,7 +93,7 @@
       webNames = [
         "chromium" "firefox"
         "playwright-driver"
-        "nodePackages.typescript" "nodePackages.eslint" "nodePackages.prettier"
+        "typescript" "eslint" "prettier"
       ];
 
       mediaNames = [
